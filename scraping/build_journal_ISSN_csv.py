@@ -138,7 +138,9 @@ def get_issn_from_title(journal_title):
 
 def main():
     df = scrape_scimagojr_table(year=2023, max_journals=2000)
+    print("Getting ISSN for each journal...")
     df['ISSN'] = df['Title'].apply(get_issn_from_title)
+    print("Saving to CSV...")
     df.to_csv('data/top_journals.csv', index=False)
 
 

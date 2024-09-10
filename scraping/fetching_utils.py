@@ -67,3 +67,36 @@ def fetch_abstracts_europe_pmc(doi):
    
     return abstract_dict
 
+
+def fetch_references_crossref(doi):
+    """ 
+    This function fetches references from Crossref for a given DOI. Crossref is better for references.
+
+    Args:
+        doi (str): The DOI of the paper to fetch references for.
+
+    Returns:
+        references (list): A list of DOIs
+    """
+    base_url = "https://api.crossref.org/works/"
+    references = []
+    try:
+        url = base_url + doi
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        if 'reference' in data['message']:
+            for ref in data['message']['reference']:
+                ref_doi = ref.get('DOI', 'Not available')       
+                references.append(ref_doi)
+            print(f"References found for DOI: {doi}")
+        else:
+            print(f"No references found for DOI: {doi}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error processing DOI {doi}: {str(e)}")
+
+    print(f"Processed {len(references)} references")
+    return references
+
