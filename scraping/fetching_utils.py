@@ -1,5 +1,9 @@
 import requests
 from xml.etree import ElementTree
+import logging
+import json
+from utils.path import resolve_data_path
+from time import sleep
 
 
 def fetch_abstracts_europe_pmc(doi):
@@ -37,25 +41,28 @@ def fetch_abstracts_europe_pmc(doi):
         result = root.find('.//result')
         
         if result is not None:
-                abstract_text = result.findtext('abstractText') or None
-                title = result.findtext('title') or None
-                authors = result.findtext('authorString') or None
-                affiliation = result.findtext('affiliation') or None
-                journal = "TBD: GET JOURNAL ID FROM DOI" # TODO: get from DOI (create a utility for this)
-                citation_count = result.findtext('citedByCount') or None
-                publication_date = result.findtext('firstPublicationDate') or None
+            issn, journal_name = get_journal_info_from_doi(doi)
+            abstract_text = result.findtext('abstractText') or None
+            title = result.findtext('title') or None
+            authors = result.findtext('authorString') or None
+            affiliation = result.findtext('affiliation') or None
+            citation_count = result.findtext('citedByCount') or None # THIS IS VERY OUTDATED
+            publication_date = result.findtext('firstPublicationDate') or None
+            references = fetch_references_crossref(doi)
 
-                print(f"Abstract found for DOI: {doi}")
-                abstract_dict = {
-                      'doi': doi,
-                      'title': title,
-                      'author': authors,
-                      'abstract': abstract_text,
-                      'affiliation': affiliation,
-                      'journal': journal,
-                      'citation_count': citation_count,
-                      'publication_date': publication_date,
-                }
+            logging.info(f"Abstract found for DOI: {doi}")
+            abstract_dict = {
+                    'doi': doi,
+                    'title': title,
+                    'author': authors,
+                    'abstract': abstract_text,
+                    'affiliation': affiliation,
+                    'journal': journal_name,
+                    'issn': issn,
+                    'citation_count': citation_count,
+                    'publication_date': publication_date,
+                    'references': references,
+            }
                 
         else:  
             print(f"No data found for DOI: {doi}")
@@ -88,15 +95,102 @@ def fetch_references_crossref(doi):
 
         if 'reference' in data['message']:
             for ref in data['message']['reference']:
-                ref_doi = ref.get('DOI', 'Not available')       
-                references.append(ref_doi)
-            print(f"References found for DOI: {doi}")
+                ref_doi = ref.get('DOI', None)  
+                if ref_doi is not None:     
+                    references.append(ref_doi)
+            logging.info(f"References found for DOI: {doi}")
         else:
-            print(f"No references found for DOI: {doi}")
+            logging.info(f"No references found for DOI: {doi}")
 
     except requests.exceptions.RequestException as e:
-        print(f"Error processing DOI {doi}: {str(e)}")
+        logging.info(f"Error processing DOI {doi}: {str(e)}")
 
-    print(f"Processed {len(references)} references")
+    logging.info(f"Processed {len(references)} references")
     return references
 
+
+
+def fetch_dois_from_issn(issn, start_date, end_date):
+    """
+    Given an issn and start/end dates ('YYYY-MM-DD'), returns a list of dois.
+    Uses the Crossref API
+    Args:
+        issn (str): unique journal identifier
+        start_date (str): YYYY-MM-DD
+        end_date (str): YYYY-MM-DD
+    Returns:
+        doi_dict (dict): ISSN (key)->list of DOI article identifiers for the specified date range
+    """
+    base_url = "https://api.crossref.org/works"
+    
+    params = {
+        "filter": f"issn:{issn},from-pub-date:{start_date},until-pub-date:{end_date}",
+        "rows": 100,
+        "cursor": "*"
+    }
+    
+    headers = {
+        "User-Agent": "MyApp/1.0 (mailto:your-email@example.com)"
+    }
+    
+    all_dois = []
+    doi_dict = {}
+    
+    while True:
+        try:
+            response = requests.get(base_url, params=params, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            items = data['message']['items']
+            dois = [item['DOI'] for item in items if 'DOI' in item]
+            if not dois:  # If no new DOIs are found, break the loop
+                print("No new DOIs found. Ending search.")
+                break
+            all_dois.extend(dois)
+            
+            print(f"Fetched {len(dois)} DOIs. Total: {len(all_dois)}")
+            
+            next_cursor = data['message'].get('next-cursor')
+            if not next_cursor:
+                break
+            
+            params['cursor'] = next_cursor
+            sleep(1)  # Be nice to the API
+            
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+            break
+        doi_dict[issn] = all_dois
+    return doi_dict
+
+def get_journal_info_from_doi(doi):
+    """
+    Grabs journal name and ISSN from a DOI
+    """
+    base_url = "https://api.crossref.org/works/"
+    headers = {"Accept": "application/json"}
+    
+    try:
+        response = requests.get(base_url + doi, headers=headers, timeout=10)
+        response.raise_for_status()  # Raises an HTTPError for bad responses
+        
+        data = response.json()
+        message = data['message']
+        
+        # Get ISSN (prefer print ISSN if available)
+        issn_list = message.get('ISSN', [])
+        issn_types = message.get('issn-type', [])
+        print_issn = next((item['value'] for item in issn_types if item['type'] == 'print'), None)
+        issn = print_issn or (issn_list[0] if issn_list else None)
+        
+        # Get journal name
+        journal_name = message.get('container-title', [None])[0]
+        
+        return issn, journal_name
+    
+    except (requests.exceptions.RequestException,
+            KeyError, IndexError, ValueError,
+            Exception) as e:
+        logging.error(f"Error processing DOI {doi}: {str(e)}")
+        return None
