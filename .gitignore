@@ -3,3 +3,4 @@ __pycache__/
 autocite.egg-info/
 venv/
 .DS_Store
+*.csv
