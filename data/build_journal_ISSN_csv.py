@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
+import logging
 
 
 
@@ -70,16 +71,16 @@ def scrape_scimagojr_table(year=2023, max_journals=2000):
                 if len(all_rows) >= max_journals:
                     break
             
-            print(f"Extracted {len(all_rows)} journal entries for year {year}")
+            logging.info(f"Extracted {len(all_rows)} journal entries for year {year}")
             page += 1
             time.sleep(2)  # Be polite to the server
             
         except requests.RequestException as e:
-            print(f"An error occurred for year {year}, page {page}: {e}")
+            logging.error(f"An error occurred for year {year}, page {page}: {e}")
             break
     
     if not all_rows or not table_headers:
-        print(f"No data extracted for year {year}")
+        logging.info(f"No data extracted for year {year}")
         return None
     
     # Ensure all rows have the same number of columns as the header
@@ -126,21 +127,21 @@ def get_issn_from_title(journal_title):
             if issn_list:
                 return issn_list[0]  # Return the first ISSN if multiple are present
             else:
-                print(f"No ISSN found for journal: {journal_title}")
+                logging.info(f"No ISSN found for journal: {journal_title}")
         else:
-            print(f"No results found for journal: {journal_title}")
+            logging.info(f"No results found for journal: {journal_title}")
 
     except requests.RequestException as e:
-        print(f"An error occurred while searching for {journal_title}: {e}")
+        logging.error(f"An error occurred while searching for {journal_title}: {e}")
 
     return None
 
 
 def main():
     df = scrape_scimagojr_table(year=2023, max_journals=2000)
-    print("Getting ISSN for each journal...")
+    logging.info("Getting ISSN for each journal...")
     df['ISSN'] = df['Title'].apply(get_issn_from_title)
-    print("Saving to CSV...")
+    logging.info("Saving to CSV...")
     df.to_csv('data/top_journals.csv', index=False)
 
 
