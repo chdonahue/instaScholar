@@ -59,3 +59,31 @@ def remove_entry(db, collection, document_id):
     except Exception as e:
         logging.info(f"An error occurred while deleting the document: {e}")
         return False
+    
+
+
+def update_field(db, collection, document_id, field_name, field_value):
+    """
+    Updates or adds a field to an existing document in the Firestore db
+
+    Args:
+    db (database obj): Firestore database object
+    collection (str): Name of the collection
+    document_id (str): ID of the document to update
+    field_name (str): Name of the field to update or add
+    field_value (any): Value to set for the field
+
+    Returns:
+    bool: True if update was successful, False if document doesn't exist
+    """
+    doc_ref = db.collection(collection).document(document_id)
+    
+    # Check if the document exists
+    if doc_ref.get().exists:
+        # Update the document with the new field
+        doc_ref.update({field_name: field_value})
+        logging.info(f"Updated {field_name} in document {document_id} from collection {collection}")
+        return True
+    else:
+        logging.warning(f"Document {document_id} does not exist in collection {collection}")
+        return False
