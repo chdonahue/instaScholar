@@ -1,12 +1,11 @@
 import requests
 from xml.etree import ElementTree
 import logging
-import json
 from utils.path import resolve_data_path
 from time import sleep
 
 
-def fetch_abstracts_europe_pmc(doi):
+def fetch_abstracts_europe_pmc(doi, logger):
     """ 
     This function fetches abstracts from Europe PMC for a list of DOIs.
 
@@ -41,16 +40,16 @@ def fetch_abstracts_europe_pmc(doi):
         result = root.find('.//result')
         
         if result is not None:
-            issn, journal_name = get_journal_info_from_doi(doi)
+            issn, journal_name = get_journal_info_from_doi(doi, logger)
             abstract_text = result.findtext('abstractText') or None
             title = result.findtext('title') or None
             authors = result.findtext('authorString') or None
             affiliation = result.findtext('affiliation') or None
             citation_count = result.findtext('citedByCount') or None # THIS IS VERY OUTDATED
             publication_date = result.findtext('firstPublicationDate') or None
-            references = fetch_references_crossref(doi)
+            references = fetch_references_crossref(doi, logger)
 
-            logging.info(f"Abstract found for DOI: {doi}")
+            logger.info(f"Abstract found for DOI: {doi}")
             abstract_dict = {
                     'doi': doi,
                     'title': title,
@@ -65,17 +64,17 @@ def fetch_abstracts_europe_pmc(doi):
             }
                 
         else:  
-            print(f"No data found for DOI: {doi}")
+            logger.info(f"No data found for DOI: {doi}")
             return None
         
     except Exception as e:
-        print(f"Error processing DOI {doi}: {str(e)}")
+        logger.info(f"Error processing DOI {doi}: {str(e)}")
         return None
    
     return abstract_dict
 
 
-def fetch_references_crossref(doi):
+def fetch_references_crossref(doi, logger):
     """ 
     This function fetches references from Crossref for a given DOI. Crossref is better for references.
 
@@ -98,19 +97,19 @@ def fetch_references_crossref(doi):
                 ref_doi = ref.get('DOI', None)  
                 if ref_doi is not None:     
                     references.append(ref_doi)
-            logging.info(f"References found for DOI: {doi}")
+            logger.info(f"References found for DOI: {doi}")
         else:
-            logging.info(f"No references found for DOI: {doi}")
+            logger.info(f"No references found for DOI: {doi}")
 
     except requests.exceptions.RequestException as e:
-        logging.info(f"Error processing DOI {doi}: {str(e)}")
+        logger.info(f"Error processing DOI {doi}: {str(e)}")
 
-    logging.info(f"Processed {len(references)} references")
+    logger.info(f"Processed {len(references)} references")
     return references
 
 
 
-def fetch_dois_from_issn(issn, start_date, end_date):
+def fetch_dois_from_issn(issn, start_date, end_date, logger):
     """
     Given an issn and start/end dates ('YYYY-MM-DD'), returns a list of dois.
     Uses the Crossref API
@@ -145,11 +144,10 @@ def fetch_dois_from_issn(issn, start_date, end_date):
             items = data['message']['items']
             dois = [item['DOI'] for item in items if 'DOI' in item]
             if not dois:  # If no new DOIs are found, break the loop
-                print("No new DOIs found. Ending search.")
                 break
             all_dois.extend(dois)
             
-            print(f"Fetched {len(dois)} DOIs. Total: {len(all_dois)}")
+            logger.info(f"Fetched {len(dois)} DOIs. Total: {len(all_dois)}")
             
             next_cursor = data['message'].get('next-cursor')
             if not next_cursor:
@@ -159,15 +157,16 @@ def fetch_dois_from_issn(issn, start_date, end_date):
             sleep(1)  # Be nice to the API
             
         except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
+            logger.info(f"An error occurred: {e}")
             break
         doi_dict[issn] = all_dois
     return doi_dict
 
-def get_journal_info_from_doi(doi):
+def get_journal_info_from_doi(doi, logger):
     """
     Grabs journal name and ISSN from a DOI
     """
+
     base_url = "https://api.crossref.org/works/"
     headers = {"Accept": "application/json"}
     
@@ -192,5 +191,5 @@ def get_journal_info_from_doi(doi):
     except (requests.exceptions.RequestException,
             KeyError, IndexError, ValueError,
             Exception) as e:
-        logging.error(f"Error processing DOI {doi}: {str(e)}")
+        logger.error(f"Error processing DOI {doi}: {str(e)}")
         return None
