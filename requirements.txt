@@ -9,7 +9,6 @@ attrs==24.2.0
 -e git+https://github.com/chdonahue/instaScholar.git@0f2970ab0711d6e03aafcedd157d614767f8fbd8#egg=autocite
 babel==2.16.0
 beautifulsoup4==4.12.3
-biopython==1.84
 bleach==6.1.0
 cachetools==5.5.0
 certifi==2024.7.4
