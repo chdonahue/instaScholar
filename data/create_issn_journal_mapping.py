@@ -1,5 +1,6 @@
 """
-Quick script that creates the ISSN_journal_dict.json file used for mappings
+Simple script that creates the ISSN_journal_dict.json file used for mappings.
+Requires the top_journals.csv (build_journal_ISSN_csv.py)
 """
 import pandas as pd
 import json
